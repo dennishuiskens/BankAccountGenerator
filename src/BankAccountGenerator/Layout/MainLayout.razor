@@ -1,0 +1,18 @@
+@inherits LayoutComponentBase
+
+<RadzenTheme Theme="material" />
+<RadzenComponents />
+
+<RadzenLayout>
+    <RadzenHeader>
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem" class="rz-p-3">
+            <RadzenIcon Icon="account_balance" Style="color: white;" />
+            <RadzenText TextStyle="TextStyle.H6" class="rz-m-0" Style="color: white;">Bank account generator (internal testing)</RadzenText>
+        </RadzenStack>
+    </RadzenHeader>
+    <RadzenBody>
+        <div class="rz-p-4" style="max-width: 1100px; margin: 0 auto;">
+            @Body
+        </div>
+    </RadzenBody>
+</RadzenLayout>

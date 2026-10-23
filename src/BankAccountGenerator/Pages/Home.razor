@@ -1,0 +1,156 @@
+@page "/"
+@inject BankRegistry Registry
+@inject IJSRuntime Js
+
+<PageTitle>Bank account generator</PageTitle>
+
+<h1 class="rz-text-h5">Generate Norwegian test bank accounts</h1>
+<p>Generates account numbers with a valid MOD11 check digit and matching IBAN. They are not real accounts.</p>
+
+@if (!_loaded)
+{
+    <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+}
+else
+{
+    <RadzenCard class="rz-mb-4">
+        <RadzenStack Gap="1rem">
+            <RadzenRadioButtonList @bind-Value="_mode" TValue="Mode" Orientation="Orientation.Vertical">
+                <Items>
+                    <RadzenRadioButtonListItem Text="Random bank" Value="Mode.Random" />
+                    <RadzenRadioButtonListItem Text="Specific bank" Value="Mode.Specific" />
+                </Items>
+            </RadzenRadioButtonList>
+
+            @if (_mode == Mode.Specific)
+            {
+                <RadzenFormField Text="Choose bank" Variant="Variant.Outlined">
+                    <RadzenDropDown @bind-Value="_selectedGroup" Data="Registry.Groups" TextProperty="Display"
+                                    AllowClear="true" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
+                                    Placeholder="Select a bank" Style="width: 100%;" />
+                </RadzenFormField>
+                <RadzenText TextStyle="TextStyle.Body2" class="rz-m-0">or type the first four digits (takes precedence over the list):</RadzenText>
+                <RadzenFormField Text="Bank code" Variant="Variant.Outlined">
+                    <RadzenTextBox @bind-Value="_typedCode" Immediate="true" MaxLength="4" Placeholder="e.g. 1503" />
+                </RadzenFormField>
+                @if (TypedCodeBank is { } typed)
+                {
+                    <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false">@typed.Name (@typed.Bic)</RadzenAlert>
+                }
+                else if (_typedCode.Length == 4)
+                {
+                    <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false">
+                        @(_typedCode.All(char.IsAsciiDigit) ? "Code is not in the bits.no list; an account will still be generated." : "Bank code must be four digits.")
+                    </RadzenAlert>
+                }
+            }
+
+            <RadzenFormField Text="Number of accounts" Variant="Variant.Outlined" Style="max-width: 200px;">
+                <RadzenNumeric @bind-Value="_count" Min="1" Max="100" />
+            </RadzenFormField>
+
+            <div>
+                <RadzenButton Text="Generate" Icon="autorenew" Click="Generate" ButtonStyle="ButtonStyle.Primary" />
+            </div>
+
+            @if (_error is not null)
+            {
+                <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false">@_error</RadzenAlert>
+            }
+        </RadzenStack>
+    </RadzenCard>
+
+    @if (_results.Count > 0)
+    {
+        <RadzenDataGrid Data="_results" TItem="GeneratedAccount" AllowSorting="false" Density="Density.Compact">
+            <Columns>
+                <RadzenDataGridColumn TItem="GeneratedAccount" Title="Account number">
+                    <Template Context="a">
+                        <code>@a.FormattedAccountNumber</code>
+                        <RadzenButton Icon="content_copy" Size="ButtonSize.ExtraSmall" Variant="Variant.Text" title="Copy" Click="() => Copy(a.AccountNumber)" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="GeneratedAccount" Title="IBAN">
+                    <Template Context="a">
+                        <code>@a.Iban</code>
+                        <RadzenButton Icon="content_copy" Size="ButtonSize.ExtraSmall" Variant="Variant.Text" title="Copy" Click="() => Copy(a.Iban)" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="GeneratedAccount" Property="BankCode" Title="Bank code" />
+                <RadzenDataGridColumn TItem="GeneratedAccount" Property="BankName" Title="Bank" />
+                <RadzenDataGridColumn TItem="GeneratedAccount" Property="Bic" Title="BIC" />
+            </Columns>
+        </RadzenDataGrid>
+    }
+}
+
+<RadzenNotification />
+
+@code {
+    private enum Mode { Random, Specific }
+
+    private bool _loaded;
+    private Mode _mode = Mode.Random;
+    private BankGroup? _selectedGroup;
+    private string _typedCode = "";
+    private int _count = 1;
+    private string? _error;
+    private List<GeneratedAccount> _results = [];
+
+    [Inject] private NotificationService Notifications { get; set; } = default!;
+
+    private Bank? TypedCodeBank => _typedCode.Length == 4 ? Registry.Find(_typedCode) : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Registry.LoadAsync();
+        _loaded = true;
+    }
+
+    private void Generate()
+    {
+        _error = null;
+        var random = Random.Shared;
+        var count = Math.Clamp(_count, 1, 100);
+        var results = new List<GeneratedAccount>(count);
+
+        if (_mode == Mode.Specific)
+        {
+            var typed = _typedCode.Trim();
+            if (typed.Length > 0 && (typed.Length != 4 || !typed.All(char.IsAsciiDigit)))
+            {
+                _error = "Bank code must be exactly four digits.";
+                return;
+            }
+
+            if (typed.Length == 0 && _selectedGroup is null)
+            {
+                _error = "Choose a bank or type a four-digit bank code.";
+                return;
+            }
+
+            for (var i = 0; i < count; i++)
+            {
+                var bank = typed.Length == 4
+                    ? Registry.Find(typed) ?? new Bank(typed, "", "Unknown bank")
+                    : _selectedGroup!.Banks[random.Next(_selectedGroup.Banks.Count)];
+                results.Add(AccountNumberGenerator.Generate(bank, random));
+            }
+        }
+        else
+        {
+            for (var i = 0; i < count; i++)
+            {
+                results.Add(AccountNumberGenerator.Generate(Registry.Banks[random.Next(Registry.Banks.Count)], random));
+            }
+        }
+
+        _results = results;
+    }
+
+    private async Task Copy(string text)
+    {
+        await Js.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        Notifications.Notify(NotificationSeverity.Success, "Copied", duration: 1500);
+    }
+}

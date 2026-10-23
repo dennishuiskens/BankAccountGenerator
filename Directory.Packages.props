@@ -1,0 +1,3 @@
+<Project>
+  <!-- Standalone tool: intentionally does not inherit the repository-wide package versions. -->
+</Project>
