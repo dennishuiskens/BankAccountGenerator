@@ -26,13 +26,16 @@ Then commit the changed `banks.json`.
 
 ## Deploy
 
+### GitHub Pages (automatic)
+
+`.github/workflows/deploy-pages.yml` publishes the site on every push to `main`. One-time setup: in the
+GitHub repository go to **Settings > Pages** and set **Source** to **GitHub Actions**. The site is then
+available at `https://<user>.github.io/<repository>/`. The workflow sets the `<base href>` for you.
+
+### Azure Static Web Apps
+
 ```pwsh
 dotnet publish src/BankAccountGenerator -c Release -o publish
 ```
 
-Upload `publish/wwwroot`.
-
-* **Azure Static Web Apps**: app location `publish/wwwroot` (or `src/BankAccountGenerator` with output
-  `wwwroot` after publish), no API. `staticwebapp.config.json` is included.
-* **GitHub Pages** (served from `/<repo>/`): after publishing, change `<base href="/" />` in
-  `publish/wwwroot/index.html` to `<base href="/<repo>/" />`, and add an empty `.nojekyll` file.
+Upload `publish/wwwroot` (no API). `staticwebapp.config.json` is included.
